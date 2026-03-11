@@ -335,6 +335,9 @@ export default function InvoiceFormPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Multi-Select Items Dialog */}
+      <Dialog open={showMultiSelectDialog} onOpenChange={setShowMultiSelectDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Select Items to Add</DialogTitle>
