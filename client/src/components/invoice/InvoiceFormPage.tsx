@@ -45,8 +45,16 @@ export default function InvoiceFormPage() {
 
   // Load next invoice number and master items
   useEffect(() => {
-    itemApi.getAll().then(({ items }) => setMasterItems(items)).catch(() => {});
-    customerApi.getAll().then(({ customers }) => setCustomers(customers)).catch(() => {});
+    itemApi.getAll().then(({ items }) => setMasterItems(items)).catch((err) => console.error("Failed to load items:", err));
+    customerApi.getAll()
+      .then(({ customers }) => {
+        console.log("Loaded customers:", customers);
+        setCustomers(customers);
+      })
+      .catch((err) => {
+        console.error("Failed to load customers:", err);
+        toast.error("Failed to load customers");
+      });
 
     if (!id) {
       invoiceApi.getNextNumber().then(({ nextNumber }) => {

@@ -1,12 +1,25 @@
 const Customer = require("../models/Customer");
 
-// GET all customers for a user
+// GET all customers (shared across all users for invoice selection)
 exports.getAll = async (req, res) => {
+  try {
+    // Return all customers for selection in invoices
+    // Users can select any existing customer when creating invoices
+    const customers = await Customer.find().sort({ createdAt: -1 });
+    res.json({ customers });
+  } catch (err) {
+    console.error("Error fetching customers:", err);
+    res.status(500).json({ error: "Failed to fetch customers" });
+  }
+};
+
+// GET all customers for a specific user (their own customers)
+exports.getUserCustomers = async (req, res) => {
   try {
     const customers = await Customer.find({ user: req.user._id }).sort({ createdAt: -1 });
     res.json({ customers });
   } catch (err) {
-    console.error("Error fetching customers:", err);
+    console.error("Error fetching user customers:", err);
     res.status(500).json({ error: "Failed to fetch customers" });
   }
 };
