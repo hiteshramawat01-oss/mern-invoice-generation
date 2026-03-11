@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const customerController = require("../controllers/customer.controller");
-const authMiddleware = require("../middleware/auth.middleware");
+const { protect } = require("../middleware/auth.middleware");
 
 // All routes require authentication
-router.use(authMiddleware);
+router.use(protect);
 
 // Get all customers
 router.get("/", customerController.getAll);
