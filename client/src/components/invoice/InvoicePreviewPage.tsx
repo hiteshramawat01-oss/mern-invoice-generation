@@ -4,9 +4,10 @@ import { useAuth } from "../../context/AuthContext";
 import { invoiceApi } from "../../services/api";
 import { Invoice } from "../../types";
 import { Button } from "../ui/button";
-import { ArrowLeft, Printer, Download } from "lucide-react";
+import { ArrowLeft, Printer, Download, CheckCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import html2pdf from "html2pdf.js";
+import { toast } from "sonner";
 
 export default function InvoicePreviewPage() {
   const { id } = useParams();
@@ -14,6 +15,7 @@ export default function InvoicePreviewPage() {
   const { business } = useAuth();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const brandColor = business?.brandColor || "#3b82f6";
   const logo = business?.logo || "";
@@ -59,6 +61,21 @@ export default function InvoicePreviewPage() {
       .catch(() => { document.body.removeChild(clone); alert("Use Print button instead."); });
   };
 
+  const handleSaveAndClose = async () => {
+    setSaving(true);
+    try {
+      // Invoice is already saved, just show success and redirect
+      toast.success("Invoice saved successfully");
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 500);
+    } catch (err) {
+      toast.error("Failed to save invoice");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="w-full">
       <style>{`
@@ -81,6 +98,9 @@ export default function InvoicePreviewPage() {
         </Button>
         <Button variant="outline" onClick={handleDownload} className="flex-1">
           <Download className="w-4 h-4 mr-2" />PDF
+        </Button>
+        <Button onClick={handleSaveAndClose} disabled={saving} className="flex-1 bg-green-600 hover:bg-green-700">
+          <CheckCircle className="w-4 h-4 mr-2" />{saving ? "Saving..." : "Save & Close"}
         </Button>
       </div>
 
