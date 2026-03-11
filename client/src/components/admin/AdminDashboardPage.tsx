@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { adminApi, itemApi } from "../../services/api";
+import { adminApi, itemApi, customerApi } from "../../services/api";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card } from "../ui/card";
-import { Trash2, Edit2, Plus, LogOut, Users, Package, BarChart3 } from "lucide-react";
+import { Trash2, Edit2, Plus, LogOut, Users, Package, BarChart3, Phone, Mail, MapPin } from "lucide-react";
 import { MasterItem } from "../../types";
 import { toast } from "sonner";
 
@@ -14,25 +14,35 @@ interface AdminUser {
   id: string; email: string; isActive: boolean; createdAt: string; invoiceCount: number;
 }
 
+interface Customer {
+  _id: string; name: string; email?: string; phone?: string; address?: string; createdAt: string;
+}
+
 export default function AdminDashboardPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"stats" | "users" | "items">("items");
+  const [tab, setTab] = useState<"stats" | "users" | "items" | "customers">("customers");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [items, setItems] = useState<MasterItem[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState({ totalUsers: 0, totalInvoices: 0 });
   const [itemForm, setItemForm] = useState({ name: "", price: "", description: "" });
+  const [customerForm, setCustomerForm] = useState({ name: "", email: "", phone: "", address: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     adminApi.getStats().then(({ totalUsers, totalInvoices }) => setStats({ totalUsers, totalInvoices })).catch(() => {});
     itemApi.getAll().then(({ items }) => setItems(items)).catch(() => {});
+    customerApi.getAll().then(({ customers }) => setCustomers(customers)).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (tab === "users") {
       adminApi.getUsers().then(({ users }) => setUsers(users)).catch(() => toast.error("Failed to load users"));
+    } else if (tab === "customers") {
+      customerApi.getAll().then(({ customers }) => setCustomers(customers)).catch(() => toast.error("Failed to load customers"));
     }
   }, [tab]);
 
@@ -81,6 +91,42 @@ export default function AdminDashboardPage() {
     setItemForm({ name: item.name, price: item.price.toString(), description: item.description || "" });
   };
 
+  const handleSaveCustomer = async () => {
+    if (!customerForm.name) { toast.error("Name is required"); return; }
+    setSaving(true);
+    try {
+      if (editingCustomerId) {
+        const { customer } = await customerApi.update(editingCustomerId, customerForm);
+        setCustomers(prev => prev.map(c => c._id === editingCustomerId ? customer : c));
+        toast.success("Customer updated");
+      } else {
+        const { customer } = await customerApi.create(customerForm);
+        setCustomers(prev => [...prev, customer]);
+        toast.success("Customer added");
+      }
+      setCustomerForm({ name: "", email: "", phone: "", address: "" });
+      setEditingCustomerId(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save customer");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (!confirm("Delete this customer?")) return;
+    try {
+      await customerApi.delete(id);
+      setCustomers(prev => prev.filter(c => c._id !== id));
+      toast.success("Customer deleted");
+    } catch { toast.error("Failed to delete customer"); }
+  };
+
+  const startEditCustomer = (customer: Customer) => {
+    setEditingCustomerId(customer._id);
+    setCustomerForm({ name: customer.name, email: customer.email || "", phone: customer.phone || "", address: customer.address || "" });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="sticky top-0 z-20 bg-slate-800 text-white border-b border-slate-700">
@@ -98,8 +144,9 @@ export default function AdminDashboardPage() {
         <div className="max-w-6xl mx-auto px-4 flex gap-4">
           {[
             { key: "stats", icon: <BarChart3 className="w-4 h-4" />, label: "Stats" },
+            { key: "customers", icon: <Users className="w-4 h-4" />, label: "Customers" },
             { key: "items", icon: <Package className="w-4 h-4" />, label: "Master Items" },
-            { key: "users", icon: <Users className="w-4 h-4" />, label: "Users" },
+            { key: "users", icon: <Users className="w-4 h-4" />, label: "App Users" },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as any)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
@@ -126,6 +173,66 @@ export default function AdminDashboardPage() {
               <p className="text-3xl font-bold text-purple-600">{items.length}</p>
               <p className="text-gray-600 mt-1">Master Items</p>
             </Card>
+            <Card className="p-6 text-center">
+              <p className="text-3xl font-bold text-orange-600">{customers.length}</p>
+              <p className="text-gray-600 mt-1">Customers</p>
+            </Card>
+          </div>
+        )}
+
+        {/* Customers */}
+        {tab === "customers" && (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="p-4">
+              <h2 className="font-semibold mb-4">{editingCustomerId ? "Edit Customer" : "Add New Customer"}</h2>
+              <div className="space-y-3">
+                <div><Label>Name *</Label><Input value={customerForm.name} onChange={e => setCustomerForm(p => ({ ...p, name: e.target.value }))} placeholder="Customer name" /></div>
+                <div><Label>Email</Label><Input type="email" value={customerForm.email} onChange={e => setCustomerForm(p => ({ ...p, email: e.target.value }))} placeholder="customer@example.com" /></div>
+                <div><Label>Phone</Label><Input type="tel" value={customerForm.phone} onChange={e => setCustomerForm(p => ({ ...p, phone: e.target.value }))} placeholder="+91 98765 43210" /></div>
+                <div><Label>Address</Label><Input value={customerForm.address} onChange={e => setCustomerForm(p => ({ ...p, address: e.target.value }))} placeholder="123 Main St" /></div>
+                <div className="flex gap-2">
+                  <Button className="flex-1" onClick={handleSaveCustomer} disabled={saving}>
+                    {saving ? "Saving..." : editingCustomerId ? "Update" : <><Plus className="w-4 h-4 mr-2" />Add Customer</>}
+                  </Button>
+                  {editingCustomerId && (
+                    <Button variant="outline" onClick={() => { setEditingCustomerId(null); setCustomerForm({ name: "", email: "", phone: "", address: "" }); }}>Cancel</Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            <div>
+              <h2 className="font-semibold mb-4">Customers ({customers.length})</h2>
+              {customers.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 border-2 border-dashed rounded-lg">
+                  <Users className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+                  <p>No customers yet. Add your first customer.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                  {customers.map(customer => (
+                    <div key={customer._id} className="p-3 bg-white border rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-lg">{customer.name}</p>
+                          {customer.email && <div className="flex items-center gap-1 text-sm text-gray-600 mt-1"><Mail className="w-3 h-3" />{customer.email}</div>}
+                          {customer.phone && <div className="flex items-center gap-1 text-sm text-gray-600"><Phone className="w-3 h-3" />{customer.phone}</div>}
+                          {customer.address && <div className="flex items-center gap-1 text-sm text-gray-600"><MapPin className="w-3 h-3" />{customer.address}</div>}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => startEditCustomer(customer)} className="h-8 w-8 p-0">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteCustomer(customer._id)} className="h-8 w-8 p-0 text-red-600 hover:bg-red-50">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -181,10 +288,10 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Users */}
+        {/* App Users */}
         {tab === "users" && (
           <div>
-            <h2 className="font-semibold mb-4">Registered Users ({users.length})</h2>
+            <h2 className="font-semibold mb-4">App Users ({users.length})</h2>
             {users.length === 0 ? (
               <div className="text-center py-12 text-gray-500 border-2 border-dashed rounded-lg">
                 <Users className="w-10 h-10 mx-auto mb-2 text-gray-400" />

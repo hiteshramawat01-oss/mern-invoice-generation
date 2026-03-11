@@ -7,7 +7,9 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card } from "../ui/card";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Copy, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import { Checkbox } from "../ui/checkbox";
 import { toast } from "sonner";
 
 function newItem(): InvoiceItem {
@@ -20,6 +22,8 @@ export default function InvoiceFormPage() {
   const { business } = useAuth();
   const [masterItems, setMasterItems] = useState<MasterItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [showMultiSelectDialog, setShowMultiSelectDialog] = useState(false);
+  const [selectedMasterItems, setSelectedMasterItems] = useState<{ [key: string]: number }>({});
 
   const [form, setForm] = useState<Invoice>({
     invoiceNumber: "INV-001", date: new Date().toISOString().split("T")[0],
@@ -56,17 +60,62 @@ export default function InvoiceFormPage() {
 
   const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, newItem()] }));
   const removeItem = (idx: number) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+  const cloneItem = (idx: number) => {
+    setForm(prev => {
+      const itemToClone = prev.items[idx];
+      const clonedItem = { ...itemToClone, id: Date.now().toString() };
+      return { ...prev, items: [...prev.items.slice(0, idx + 1), clonedItem, ...prev.items.slice(idx + 1)] };
+    });
+  };
+
+  const toggleMasterItemSelection = (masterId: string) => {
+    setSelectedMasterItems(prev => {
+      const newState = { ...prev };
+      if (newState[masterId]) {
+        delete newState[masterId];
+      } else {
+        newState[masterId] = 1; // Default quantity
+      }
+      return newState;
+    });
+  };
+
+  const updateMasterItemQuantity = (masterId: string, quantity: number) => {
+    if (quantity < 1) return;
+    setSelectedMasterItems(prev => ({
+      ...prev,
+      [masterId]: quantity,
+    }));
+  };
+
+  const addSelectedMasterItems = () => {
+    const selectedItemIds = Object.keys(selectedMasterItems);
+    const newInvoiceItems = selectedItemIds.map(masterId => {
+      const master = masterItems.find(m => m._id === masterId);
+      const quantity = selectedMasterItems[masterId];
+      return {
+        id: Date.now().toString() + Math.random(),
+        description: master!.name,
+        quantity,
+        price: master!.price
+      };
+    });
+    setForm(prev => ({ ...prev, items: [...prev.items, ...newInvoiceItems] }));
+    setSelectedMasterItems({});
+    setShowMultiSelectDialog(false);
+    toast.success(`Added ${newInvoiceItems.length} item(s) to invoice`);
+  };
   const updateItem = (idx: number, field: keyof InvoiceItem, value: any) =>
     setForm(prev => ({ ...prev, items: prev.items.map((item, i) => i === idx ? { ...item, [field]: value } : item) }));
 
   const handleMasterSelect = (idx: number, masterId: string) => {
     const master = masterItems.find(m => m._id === masterId);
-    if (master) updateItem(idx, "description", master.name) || updateItem(idx, "price", master.price);
-    // Two updates at once:
-    setForm(prev => ({
-      ...prev,
-      items: prev.items.map((item, i) => i === idx ? { ...item, description: master!.name, price: master!.price } : item)
-    }));
+    if (master) {
+      setForm(prev => ({
+        ...prev,
+        items: prev.items.map((item, i) => i === idx ? { ...item, description: master.name, price: master.price } : item)
+      }));
+    }
   };
 
   const subtotal = form.items.reduce((s, i) => s + i.quantity * i.price, 0);
@@ -126,8 +175,15 @@ export default function InvoiceFormPage() {
         {/* Items */}
         <Card className="p-4 mb-4">
           <div className="flex justify-between items-center mb-3">
-            <h2 className="font-semibold">Items</h2>
-            <Button size="sm" onClick={addItem}><Plus className="w-4 h-4 mr-1" />Add Item</Button>
+            <h2 className="font-semibold">Items ({form.items.length})</h2>
+            <div className="flex gap-2">
+              {masterItems.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setShowMultiSelectDialog(true)} className="border-green-500 text-green-600 hover:bg-green-50">
+                  <Plus className="w-4 h-4 mr-1" />Multi-Select
+                </Button>
+              )}
+              <Button size="sm" onClick={addItem} className="bg-blue-600 hover:bg-blue-700"><Plus className="w-4 h-4 mr-1" />Add Item</Button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -135,9 +191,14 @@ export default function InvoiceFormPage() {
               <div key={item.id || idx} className="border rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-start">
                   <Label className="text-sm">Item {idx + 1}</Label>
-                  <Button variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-6 w-6 p-0">
-                    <Trash2 className="w-4 h-4 text-red-500" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => cloneItem(idx)} className="h-6 w-6 p-0" title="Duplicate item">
+                      <Copy className="w-4 h-4 text-blue-500" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-6 w-6 p-0" title="Remove item">
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </div>
                 </div>
                 {masterItems.length > 0 && (
                   <div>
@@ -170,9 +231,10 @@ export default function InvoiceFormPage() {
           </div>
 
           {form.items.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-3">No items added yet</p>
-              <Button variant="outline" onClick={addItem}><Plus className="w-4 h-4 mr-2" />Add First Item</Button>
+            <div className="text-center py-12">
+              <p className="text-gray-600 mb-4 font-medium">No items added yet</p>
+              <p className="text-gray-500 text-sm mb-4">Add items to your invoice</p>
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={addItem} size="lg"><Plus className="w-5 h-5 mr-2" />Add First Item</Button>
             </div>
           )}
         </Card>
@@ -211,6 +273,86 @@ export default function InvoiceFormPage() {
           </Button>
         </div>
       )}
+
+      {/* Multi-Select Items Dialog */}
+      <Dialog open={showMultiSelectDialog} onOpenChange={setShowMultiSelectDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select Items to Add</DialogTitle>
+          </DialogHeader>
+
+          {masterItems.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No saved items available</p>
+            </div>
+          ) : (
+            <div className="space-y-2 py-4">
+              {masterItems.map(item => {
+                const isSelected = item._id in selectedMasterItems;
+                const quantity = selectedMasterItems[item._id] || 1;
+                return (
+                  <div key={item._id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition ${isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50'}`} onClick={() => toggleMasterItemSelection(item._id)}>
+                    <Checkbox checked={isSelected} onChange={(checked) => {
+                      if (checked !== isSelected) toggleMasterItemSelection(item._id);
+                    }} onClick={(e) => e.stopPropagation()} />
+                    <div className="flex-1">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="text-sm text-gray-600">{item.description || "No description"}</p>
+                    </div>
+                    <div className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <p className="font-semibold">₹{item.price.toFixed(2)}</p>
+                    </div>
+                    {isSelected && (
+                      <div className="flex items-center gap-2 border rounded-lg bg-white" onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => updateMasterItemQuantity(item._id, quantity - 1)}
+                          className="h-6 w-6 p-0 text-gray-600"
+                        >
+                          −
+                        </Button>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          value={quantity} 
+                          onChange={(e) => updateMasterItemQuantity(item._id, Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-12 text-center border-0 outline-none text-sm font-semibold"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => updateMasterItemQuantity(item._id, quantity + 1)}
+                          className="h-6 w-6 p-0 text-gray-600"
+                        >
+                          +
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <DialogFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => setShowMultiSelectDialog(false)}>
+              Cancel
+            </Button>
+            <div className="text-sm text-gray-600">
+              {Object.keys(selectedMasterItems).length} item type(s) selected ({Object.values(selectedMasterItems).reduce((a, b) => a + b, 0)} total qty)
+            </div>
+            <Button 
+              className="bg-green-600 hover:bg-green-700" 
+              onClick={addSelectedMasterItems}
+              disabled={Object.keys(selectedMasterItems).length === 0}
+            >
+              Add {Object.keys(selectedMasterItems).length > 0 ? `${Object.keys(selectedMasterItems).length} Item Type(s)` : "Items"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

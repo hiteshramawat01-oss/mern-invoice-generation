@@ -11,6 +11,7 @@ const invoiceRoutes = require("./routes/invoice.routes");
 const businessRoutes = require("./routes/business.routes");
 const adminRoutes = require("./routes/admin.routes");
 const itemRoutes = require("./routes/item.routes");
+const customerRoutes = require("./routes/customer.routes");
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/items", itemRoutes);
+app.use("/api/customers", customerRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {

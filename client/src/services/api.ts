@@ -124,3 +124,29 @@ export const adminApi = {
   getStats: () =>
     fetch(`${BASE}/admin/stats`, { headers: authHeaders() }).then(handleResponse),
 };
+
+// ── Customers ─────────────────────────────────────────
+export const customerApi = {
+  getAll: () =>
+    fetch(`${BASE}/customers`, { headers: authHeaders() }).then(handleResponse),
+
+  create: (data: { name: string; email?: string; phone?: string; address?: string }) =>
+    fetch(`${BASE}/customers`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    }).then(handleResponse),
+
+  update: (id: string, data: Partial<{ name: string; email: string; phone: string; address: string }>) =>
+    fetch(`${BASE}/customers/${id}`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    }).then(handleResponse),
+
+  delete: (id: string) =>
+    fetch(`${BASE}/customers/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    }).then(handleResponse),
+};
