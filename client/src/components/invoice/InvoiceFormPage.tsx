@@ -1,16 +1,24 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { invoiceApi, itemApi } from "../../services/api";
+import { invoiceApi, itemApi, customerApi } from "../../services/api";
 import { Invoice, InvoiceItem, MasterItem } from "../../types";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card } from "../ui/card";
-import { Plus, Trash2, ArrowLeft, Copy, X } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Copy, X, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Checkbox } from "../ui/checkbox";
 import { toast } from "sonner";
+
+interface Customer {
+  _id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
 
 function newItem(): InvoiceItem {
   return { id: Date.now().toString(), description: "", quantity: 1, price: 0 };
@@ -21,8 +29,10 @@ export default function InvoiceFormPage() {
   const navigate = useNavigate();
   const { business } = useAuth();
   const [masterItems, setMasterItems] = useState<MasterItem[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [saving, setSaving] = useState(false);
   const [showMultiSelectDialog, setShowMultiSelectDialog] = useState(false);
+  const [showCustomerSelector, setShowCustomerSelector] = useState(false);
   const [selectedMasterItems, setSelectedMasterItems] = useState<{ [key: string]: number }>({});
 
   const [form, setForm] = useState<Invoice>({
@@ -36,6 +46,7 @@ export default function InvoiceFormPage() {
   // Load next invoice number and master items
   useEffect(() => {
     itemApi.getAll().then(({ items }) => setMasterItems(items)).catch(() => {});
+    customerApi.getAll().then(({ customers }) => setCustomers(customers)).catch(() => {});
 
     if (!id) {
       invoiceApi.getNextNumber().then(({ nextNumber }) => {
@@ -155,7 +166,12 @@ export default function InvoiceFormPage() {
       <div className="w-full max-w-2xl mx-auto p-4 pb-28">
         {/* Customer Info */}
         <Card className="p-4 mb-4">
-          <h2 className="font-semibold mb-3">Bill To</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="font-semibold mb-3">Bill To</h2>
+            <Button size="sm" variant="outline" onClick={() => setShowCustomerSelector(true)} className="border-blue-500 text-blue-600 hover:bg-blue-50">
+              <Users className="w-4 h-4 mr-1" />Choose Customer
+            </Button>
+          </div>
           <div className="space-y-3">
             <div>
               <Label>Customer Name *</Label>
@@ -274,8 +290,51 @@ export default function InvoiceFormPage() {
         </div>
       )}
 
-      {/* Multi-Select Items Dialog */}
-      <Dialog open={showMultiSelectDialog} onOpenChange={setShowMultiSelectDialog}>
+      {/* Customer Selector Dialog */}
+      <Dialog open={showCustomerSelector} onOpenChange={setShowCustomerSelector}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select Customer</DialogTitle>
+          </DialogHeader>
+
+          {customers.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-500">No customers available. Create customers in Admin Dashboard first.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {customers.map(customer => (
+                <div
+                  key={customer._id}
+                  onClick={() => {
+                    setForm(prev => ({
+                      ...prev,
+                      customerName: customer.name,
+                      customerPhone: customer.phone || "",
+                      customerAddress: customer.address || "",
+                    }));
+                    setShowCustomerSelector(false);
+                    toast.success(`Selected ${customer.name}`);
+                  }}
+                  className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition"
+                >
+                  <p className="font-medium text-lg">{customer.name}</p>
+                  {customer.phone && <p className="text-sm text-gray-600">📞 {customer.phone}</p>}
+                  {customer.email && <p className="text-sm text-gray-600">📧 {customer.email}</p>}
+                  {customer.address && <p className="text-sm text-gray-600">📍 {customer.address}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCustomerSelector(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Select Items to Add</DialogTitle>
@@ -292,9 +351,7 @@ export default function InvoiceFormPage() {
                 const quantity = selectedMasterItems[item._id] || 1;
                 return (
                   <div key={item._id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition ${isSelected ? 'bg-blue-50 border-blue-300' : 'hover:bg-gray-50'}`} onClick={() => toggleMasterItemSelection(item._id)}>
-                    <Checkbox checked={isSelected} onChange={(checked) => {
-                      if (checked !== isSelected) toggleMasterItemSelection(item._id);
-                    }} onClick={(e) => e.stopPropagation()} />
+                    <Checkbox checked={isSelected} onChange={() => toggleMasterItemSelection(item._id)} onClick={(e) => e.stopPropagation()} />
                     <div className="flex-1">
                       <p className="font-medium">{item.name}</p>
                       <p className="text-sm text-gray-600">{item.description || "No description"}</p>
